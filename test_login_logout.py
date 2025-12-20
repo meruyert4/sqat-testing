@@ -27,7 +27,7 @@ class LoginLogoutTest(unittest.TestCase):
         driver = self.driver
         
         # Go to the login page
-        driver.get(os.getenv("BASE_URL3"))
+        driver.get(os.getenv("BASE_URL2"))
         time.sleep(1)
 
         # Enter username
@@ -52,7 +52,7 @@ class LoginLogoutTest(unittest.TestCase):
         driver = self.driver
         
         # First login
-        driver.get(os.getenv("BASE_URL3"))
+        driver.get(os.getenv("BASE_URL2"))
         time.sleep(1)
 
         driver.find_element(By.ID, "username").send_keys(os.getenv("USERNAME"))
