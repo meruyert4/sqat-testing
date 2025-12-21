@@ -8,7 +8,6 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select
 
 load_dotenv()
 
@@ -18,169 +17,221 @@ class FlightBookingTest(unittest.TestCase):
     def setUp(self):
         options = webdriver.ChromeOptions()
         options.add_argument("--disable-notifications")
-        options.add_argument("--disable-infobars")
         options.add_argument("--start-maximized")
-
         self.driver = webdriver.Chrome(
             service=Service(ChromeDriverManager().install()),
             options=options
         )
 
     def test_flight_booking_scat(self):
-        """Test flight booking process on SCAT Airlines"""
         driver = self.driver
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(driver, 30)
 
-        # 1️⃣ Go to SCAT Airlines homepage
+        # 1. Go to SCAT Airlines
         driver.get(os.getenv("BASE_URL3"))
-        time.sleep(3)
-        
+        time.sleep(5)
         self.assertIn("scat", driver.current_url.lower())
-        print("✓ Checkpoint 1: SCAT Airlines homepage loaded")
+        
+        # Wait for page to be fully loaded
+        wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+        time.sleep(2)  # Additional wait for dynamic content
+        
+        # Wait for search form to be present
+        try:
+            wait.until(EC.presence_of_element_located((By.XPATH, "//form | //input[@type='text'] | //div[contains(@class,'search')]")))
+        except:
+            pass  # Continue even if form selector doesn't match exactly
+        
+        print("Checkpoint 1: Homepage loaded")
 
-        # 2️⃣ Enter destination in "куда" field
-        to_input = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "input[placeholder='Город или страна']"))
-        )
-        # Click the second input (destination)
-        inputs = driver.find_elements(By.CSS_SELECTOR, "input[placeholder='Город или страна']")
-        if len(inputs) > 1:
-            inputs[1].click()
-            inputs[1].send_keys("Алматы")
-        else:
-            to_input.click()
-            to_input.send_keys("Алматы")
+        # 2. Enter from Astana - try multiple selector strategies
+        from_input = None
+        selectors = [
+            "//input[contains(@placeholder,'From')]",
+            "//input[contains(@placeholder,'from')]",
+            "//input[contains(@placeholder,'FROM')]",
+            "//label[contains(text(),'from') or contains(text(),'From')]/following-sibling::input",
+            "//label[contains(text(),'from') or contains(text(),'From')]/../input",
+            "(//form//input[@type='text'])[1]",
+            "(//div[contains(@class,'search')]//input)[1]",
+            "(//input[@type='text'])[1]"
+        ]
+        
+        for selector in selectors:
+            try:
+                from_input = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                print(f"Found 'from' input using selector: {selector}")
+                break
+            except:
+                continue
+        
+        if not from_input:
+            raise Exception("Could not find 'from' input field")
+        
+        from_input.click()
+        time.sleep(1)
+        from_input.clear()
+        from_input.send_keys("Astana")
+        time.sleep(2)
+
+        # 3. Enter destination Almaty - try multiple selector strategies
+        to_input = None
+        selectors = [
+            "//input[contains(@placeholder,'To') and not(contains(@placeholder,'From'))]",
+            "//input[contains(@placeholder,'to') and not(contains(@placeholder,'from'))]",
+            "//input[contains(@placeholder,'TO') and not(contains(@placeholder,'FROM'))]",
+            "//label[contains(text(),'to') or contains(text(),'To')]/following-sibling::input[not(contains(@placeholder,'from'))]",
+            "//label[contains(text(),'to') or contains(text(),'To')]/../input[not(contains(@placeholder,'from'))]",
+            "(//form//input[@type='text'])[2]",
+            "(//div[contains(@class,'search')]//input)[2]",
+            "(//input[@type='text'])[2]"
+        ]
+        
+        for selector in selectors:
+            try:
+                to_input = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                print(f"Found 'to' input using selector: {selector}")
+                break
+            except:
+                continue
+        
+        if not to_input:
+            raise Exception("Could not find 'to' input field")
+        
+        to_input.click()
+        time.sleep(1)
+        to_input.clear()
+        to_input.send_keys("Almaty")
         time.sleep(2)
         
-        # Select first suggestion
         first_suggestion = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "[class*='suggestion'], [class*='dropdown'] li, [class*='autocomplete'] div"))
+            EC.element_to_be_clickable((By.XPATH, "//ul//li | //div[contains(@class,'dropdown')]//div"))
         )
         first_suggestion.click()
-        time.sleep(1)
-        print("✓ Checkpoint 2: Destination Almaty selected")
+        print("Checkpoint 2: Destination selected")
 
-        # 3️⃣ Click on departure date field
+        # 3. Select date
         date_field = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//div[contains(text(),'отправление')] | //input[contains(@placeholder,'отправление')]"))
+            EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'date')]"))
         )
         date_field.click()
         time.sleep(2)
-        print("✓ Checkpoint 3: Date picker opened")
+        
+        available_date = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//td[contains(@class,'available')]"))
+        )
+        available_date.click()
+        print("Checkpoint 3: Date selected")
 
-        # 4️⃣ Select first available date (blue colored)
-        available_dates = driver.find_elements(By.CSS_SELECTOR, "[class*='calendar'] [class*='day'][class*='available'], td[class*='available'], div[class*='price']")
-        if available_dates:
-            available_dates[0].click()
-        else:
-            # Try clicking any date with price
-            date_with_price = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//td[contains(@class,'day') and .//span[contains(text(),'₸')]] | //div[contains(@class,'day') and contains(text(),'₸')]"))
-            )
-            date_with_price.click()
-        time.sleep(1)
-        print("✓ Checkpoint 4: Date selected")
-
-        # 5️⃣ Click "В одну сторону" (One way) button
+        # 4. Click One way
         one_way_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'В одну сторону')] | //span[contains(text(),'В одну сторону')]"))
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'One way')]"))
         )
         one_way_btn.click()
-        time.sleep(1)
-        print("✓ Checkpoint 5: One way selected")
+        print("Checkpoint 4: One way selected")
 
-        # 6️⃣ Click search button
+        # 5. Search
         search_btn = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit'], [class*='search-btn'], button[class*='search']"))
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
         )
         search_btn.click()
         time.sleep(5)
-        print("✓ Checkpoint 6: Search started")
+        print("Checkpoint 5: Search done")
 
-        # 7️⃣ Select first flight from results
+        # 6. Select first flight
         first_flight = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Выбрать')] | //div[contains(@class,'flight')]//button"))
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Select')]"))
         )
         first_flight.click()
-        time.sleep(2)
-        print("✓ Checkpoint 7: First flight selected")
+        time.sleep(3)
+        print("Checkpoint 6: Flight selected")
 
-        # 8️⃣ Select LIGHT fare (first option)
-        light_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'LIGHT') or contains(text(),'LIGHT')]//button[contains(text(),'Выбрать')] | //button[contains(text(),'Выбрать')][1]"))
+        # 7. Select first bundle (OPTIMUM or FLEX - whichever is first)
+        time.sleep(2)  # Wait for bundle selection page to load
+        first_bundle_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "(//button[contains(text(),'Select')])[1]"))
         )
-        light_btn.click()
-        time.sleep(2)
-        print("✓ Checkpoint 8: LIGHT fare selected")
+        first_bundle_btn.click()
+        time.sleep(3)  # Wait a bit after selecting bundle
+        print("Checkpoint 7: First bundle selected")
 
-        # 9️⃣ Click "Продолжить" (Continue)
+        # 8. Continue to form
         continue_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Продолжить')]"))
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Continue')]"))
         )
         continue_btn.click()
         time.sleep(3)
-        print("✓ Checkpoint 9: Continued to passenger form")
+        print("Checkpoint 8: Passenger form opened")
 
-        # 🔟 Fill passenger form
-        # Email
+        # 9. Fill form - Contact section first
         email_input = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//input[contains(@placeholder,'почта') or contains(@placeholder,'Email')]"))
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'mail') or contains(@placeholder,'Email')]"))
         )
+        email_input.clear()
         email_input.send_keys(os.getenv("EMAIL"))
-        
-        # Phone
-        phone_input = driver.find_element(By.XPATH, "//input[contains(@placeholder,'Телефон') or contains(@placeholder,'Phone')]")
-        phone_input.send_keys(os.getenv("PHONE"))
-        
-        # Last name (Фамилия)
-        lastname_input = driver.find_element(By.XPATH, "//input[contains(@placeholder,'Фамилия')]")
-        lastname_input.send_keys(os.getenv("LAST_NAME"))
-        
-        # First name (Имя)
-        firstname_input = driver.find_element(By.XPATH, "//input[contains(@placeholder,'Имя')]")
-        firstname_input.send_keys(os.getenv("FIRST_NAME"))
-        
-        # Birth date
-        birthdate_input = driver.find_element(By.XPATH, "//input[contains(@placeholder,'рождения') or contains(@placeholder,'birth')]")
-        birthdate_input.send_keys(os.getenv("BIRTH_DATE"))
-        
-        print("✓ Checkpoint 10: Personal info filled")
-
-        # 1️⃣1️⃣ Select document type (second option)
-        try:
-            doc_type_dropdown = driver.find_element(By.XPATH, "//div[contains(text(),'Тип документа')] | //select[contains(@name,'document')]")
-            doc_type_dropdown.click()
-            time.sleep(1)
-            second_option = driver.find_elements(By.CSS_SELECTOR, "[class*='option'], li[class*='item']")
-            if len(second_option) > 1:
-                second_option[1].click()
-        except:
-            pass
-        
-        # Document number
-        doc_number_input = driver.find_element(By.XPATH, "//input[contains(@placeholder,'документа') or contains(@placeholder,'Номер')]")
-        doc_number_input.send_keys(os.getenv("PASSPORT_NUMBER"))
-        
-        print("✓ Checkpoint 11: Document info filled")
-
-        # 1️⃣2️⃣ Click checkbox "Я ознакомился (-лась)"
-        checkbox = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox'] | //label[contains(text(),'ознакомился')]"))
-        )
-        checkbox.click()
         time.sleep(1)
-        print("✓ Checkpoint 12: Agreement checkbox clicked")
-
-        # 1️⃣3️⃣ Click final "Продолжить" button
-        final_continue = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Продолжить')]"))
+        
+        phone_input = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'Phone')]"))
         )
-        final_continue.click()
-        time.sleep(3)
-        print("✓ Checkpoint 13: Final continue clicked - TEST COMPLETE 🎉")
+        phone_input.clear()
+        phone_input.send_keys(os.getenv("PHONE"))
+        time.sleep(1)
+        
+        # Fill passenger details
+        lastname_input = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'Last') or contains(@placeholder,'last')]"))
+        )
+        lastname_input.clear()
+        lastname_input.send_keys(os.getenv("LAST_NAME"))
+        time.sleep(1)
+        
+        firstname_input = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'First') or contains(@placeholder,'first')]"))
+        )
+        firstname_input.clear()
+        firstname_input.send_keys(os.getenv("FIRST_NAME"))
+        time.sleep(1)
+        
+        birthdate_input = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'birth') or contains(@placeholder,'Birth')]"))
+        )
+        birthdate_input.clear()
+        birthdate_input.send_keys(os.getenv("BIRTH_DATE"))
+        time.sleep(1)
+        
+        # Select gender - female icon (second one)
+        # Find buttons near the birth date field and select the second one
+        gender_icon = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "(//input[contains(@placeholder,'birth') or contains(@placeholder,'Birth')]/ancestor::div[1]//button)[2] | (//input[contains(@placeholder,'birth') or contains(@placeholder,'Birth')]/following-sibling::*//button)[2] | (//div[contains(text(),'Adult')]/ancestor::div[1]//button)[2]"))
+        )
+        gender_icon.click()
+        time.sleep(1)
+        
+        doc_input = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder,'document') or contains(@placeholder,'Document')]"))
+        )
+        doc_input.clear()
+        doc_input.send_keys(os.getenv("PASSPORT_NUMBER"))
+        time.sleep(1)
+        print("Checkpoint 9: Form filled")
 
-        # Stop at payment page
-        self.assertTrue(True, "Booking flow completed successfully")
+        # 10. Click checkbox and continue
+        checkbox = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox']"))
+        )
+        if not checkbox.is_selected():
+            checkbox.click()
+        time.sleep(1)
+        
+        final_btn = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Continue')]"))
+        )
+        final_btn.click()
+        time.sleep(2)
+        print("Checkpoint 10: TEST COMPLETE")
+
+        self.assertTrue(True)
 
     def tearDown(self):
         self.driver.quit()
