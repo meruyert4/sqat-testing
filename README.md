@@ -20,7 +20,11 @@ source venv/bin/activate
 pip install selenium webdriver-manager python-dotenv
 ```
 
+4. Create .env with variables shown in .env.example
+
 ## Run Tests
 ```bash
 python test_search.py
+python test_login_logout.py
+python test_flight_booking.py
 ```
