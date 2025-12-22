@@ -10,7 +10,7 @@ from selenium.webdriver.common.keys import Keys
 import time
 
 
-class AviasalesOpenTest(unittest.TestCase):
+class AviasalesTest(unittest.TestCase):
     def setUp(self):
         self.driver = webdriver.Chrome(
             service=Service(ChromeDriverManager().install())
@@ -22,7 +22,7 @@ class AviasalesOpenTest(unittest.TestCase):
         driver.get("https://www.aviasales.kz")
         wait = WebDriverWait(driver, 20)
 
-        print("удаляем галочку")
+        print("Removing checkbox")
 
         # Disable Booking.com checkbox
         try:
@@ -34,13 +34,13 @@ class AviasalesOpenTest(unittest.TestCase):
 
             if checkbox_input.is_selected():
                 driver.execute_script("arguments[0].click();", booking_label)
-                print("Галочка Booking.com была активна — выключили.")
+                print("Booking.com checkbox was active - disabled it.")
             else:
                 driver.execute_script("arguments[0].click();", booking_label)
-                print("Нажали на чекбокс Booking.com (inactive mode).")
+                print("Clicked on Booking.com checkbox (inactive mode).")
 
         except Exception as e:
-            print(f"Не удалось обработать чекбокс Booking: {e}")
+            print(f"Failed to handle Booking checkbox: {e}")
 
         print("Filling search form...")
 
@@ -130,7 +130,7 @@ class AviasalesOpenTest(unittest.TestCase):
         original_window = driver.current_window_handle
 
         buy_button.click()
-        print("Clicked 'Купить' button for first proposal")
+        print("Clicked 'Buy' button for first proposal")
 
         # Wait for new window and switch to it
         WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))
