@@ -143,7 +143,7 @@ class AviasalesTest(unittest.TestCase):
         print(f"New page title: {driver.title}")
 
         # Booking form data
-        email = "example@astanait.edu.kz"
+        email = "23232323@astanait.edu.kz"
         phone = "7787296919"
         name = "Meruyert"
         lastname = "Boranbay"
