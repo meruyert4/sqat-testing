@@ -143,7 +143,7 @@ class AviasalesTest(unittest.TestCase):
         print(f"New page title: {driver.title}")
 
         # Booking form data
-        email = "example@astanait.edu.kz"
+        email = "23232323@astanait.edu.kz"
         phone = "7787296919"
         name = "Meruyert"
         lastname = "Boranbay"
@@ -151,10 +151,10 @@ class AviasalesTest(unittest.TestCase):
         birth_month = 7
         birth_year = 2005
         passport_number = "123456798"
-        passport_exp_day = 15
-        passport_exp_month = 3
-        passport_exp_year = 2032
-        natianalaty="Россия"
+        passport_exp_day = 12
+        passport_exp_month = 12
+        passport_exp_year = 2030
+        nationality="Казахстан"
 
         # Fill email
         email_input = WebDriverWait(driver, 20).until(
@@ -179,17 +179,17 @@ class AviasalesTest(unittest.TestCase):
         lastname_input.send_keys(lastname)
 
 
-        # Select gender (male)
-        male_label = driver.find_element(By.XPATH, '//*[@id="gender_M_0"]')
-        if not male_label.is_selected():
+        # Select gender (female)
+        female_label = driver.find_element(By.XPATH, '//*[@id="gender_F_0"]')
+        if not female_label.is_selected():
             try:
                 close_overlay = driver.find_elements(By.CSS_SELECTOR, '.membership-container [data-testid="closeIcon"]')
                 if close_overlay:
                     close_overlay[0].click()
                     WebDriverWait(driver, 5).until(EC.invisibility_of_element_located((By.ID, 'membershipContainer')))
-                male_label.click()
+                female_label.click()
             except Exception:
-                driver.execute_script("arguments[0].click();", male_label)
+                driver.execute_script("arguments[0].click();", female_label)
 
         # Fill date of birth
         from selenium.webdriver.support.ui import Select
@@ -217,13 +217,13 @@ class AviasalesTest(unittest.TestCase):
             EC.visibility_of_element_located((By.CSS_SELECTOR, '.searchable-select__search'))
         )
         search_input.clear()
-        search_input.send_keys(natianalaty)
+        search_input.send_keys(nationality)
 
         option = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, f"//div[contains(@class, 'searchable-select__option') and text()='{natianalaty}']"))
+            EC.element_to_be_clickable((By.XPATH, f"//div[contains(@class, 'searchable-select__option') and text()='{nationality}']"))
         )
         option.click()
-        print(f"Selected nationality: {natianalaty}")
+        print(f"Selected nationality: {nationality}")
 
         # Select comfort package
         comfort_package = WebDriverWait(driver, 10).until(
