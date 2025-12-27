@@ -15,7 +15,6 @@ class TestGitHubWaits(unittest.TestCase):
 
         # implicit Wait
         self.driver.implicitly_wait(10)
-        # Navigate to GitHub Explore (live site)
         self.driver.get("https://github.com/explore")
 
     def tearDown(self):
@@ -26,12 +25,14 @@ class TestGitHubWaits(unittest.TestCase):
     def test_github_waits(self):
         driver = self.driver
 
+        # explicit wait
         with allure.step("Explicit wait for 'Trending' link to be clickable and navigate"):
             trending_link = WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "Trending"))
             )
             trending_link.click()
 
+        # fluent wait
         with allure.step("Fluent wait for trending repository list with polling and ignored exception"):
             fluent_wait = WebDriverWait(
                 driver,
@@ -39,10 +40,10 @@ class TestGitHubWaits(unittest.TestCase):
                 poll_frequency=1,
                 ignored_exceptions=[NoSuchElementException]
             )
-            # Wait for trending repository rows to appear
+            # wait for trending repository rows to appear
             results = fluent_wait.until(
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, "article.Box-row"))
             )
 
-        # Verify we have at least one trending repository row
+        # verify we have at least one trending repository row
         self.assertGreater(len(results), 0)

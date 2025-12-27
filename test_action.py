@@ -34,7 +34,6 @@ def test_github_actions(driver):
         actions.move_to_element(subscribe_btn).perform()
         assert subscribe_btn.is_displayed()
     except:
-        # Fallback: hover over page body
         body = driver.find_element(By.TAG_NAME, "body")
         actions.move_to_element(body).perform()
         assert body.is_displayed()
@@ -63,7 +62,6 @@ def test_github_actions(driver):
         WebDriverWait(driver, 10).until(lambda d: d.find_element(By.CSS_SELECTOR, "input#search").get_attribute("value") == "")
         assert search_input.get_attribute("value") == ""
     except:
-        # If search input not found, test keyboard actions on body as fallback
         body = driver.find_element(By.TAG_NAME, "body")
         body.send_keys("test")
         mod_key = Keys.COMMAND if sys.platform == "darwin" else Keys.CONTROL
