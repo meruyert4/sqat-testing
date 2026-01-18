@@ -7,7 +7,9 @@ import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.Select;
 import org.testng.Assert;
+import org.testng.SkipException;
 import org.testng.annotations.Test;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -227,22 +229,37 @@ public class AviasalesTest extends BaseTest {
     }
     
     /**
-     * Click buy button for the first proposal
+     * Click buy button for Wingie proposal
      */
     private void clickBuyButton() {
-        logStep("Clicking buy button");
+        logStep("Looking for Wingie proposal");
         
         try {
             Thread.sleep(3000);
             
+            // Check if Wingie exists
+            List<WebElement> wingieElements = driver.findElements(By.xpath("//div[contains(text(), 'Wingie')]"));
+            
+            if (wingieElements.isEmpty()) {
+                logWarning("Wingie proposal not found - skipping test");
+                throw new SkipException("Wingie proposal not available in search results");
+            }
+            
+            logStep("Wingie proposal found, clicking buy button");
+            
+            // Find the Buy button associated with Wingie
+            // Based on HTML structure: data-test-id="text" contains Wingie, button is in parent/sibling
             WebElement buyButton = driver.findElement(
-                By.xpath("/html/body/div[2]/div/div/div/div/div[2]/div/div[2]/div[3]/div[1]/div[1]/div/div[2]/button")
+                By.xpath("//div[@data-test-id='text' and contains(text(), 'Wingie')]/ancestor::div[@data-test-id='proposal-0' or contains(@class, 'proposal')]//button")
             );
             
             String originalWindow = driver.getWindowHandle();
             
-            buyButton.click();
-            logStep("Clicked 'Buy' button for first proposal");
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", buyButton);
+            Thread.sleep(1000);
+            
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", buyButton);
+            logStep("Clicked 'Buy' button for Wingie proposal");
             
             // Wait for new window
             Thread.sleep(3000);
@@ -256,10 +273,13 @@ public class AviasalesTest extends BaseTest {
             }
             
             logStep("Switched to new window: " + driver.getTitle());
-            logPass("Buy button clicked and switched to booking page");
+            logPass("Buy button clicked for Wingie and switched to booking page");
+        } catch (SkipException e) {
+            throw e;
         } catch (Exception e) {
-            logger.error("Failed to click buy button: " + e.getMessage());
-            Assert.fail("Failed to click buy button: " + e.getMessage());
+            logger.error("Failed to click buy button for Wingie: " + e.getMessage());
+            logStep("Current URL: " + driver.getCurrentUrl());
+            Assert.fail("Failed to click buy button for Wingie: " + e.getMessage());
         }
     }
     
