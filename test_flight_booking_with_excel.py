@@ -1,7 +1,7 @@
 import unittest
 import time
 import os
-import logging
+from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.firefox.service import Service as FirefoxService
@@ -13,548 +13,160 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from excel_reader import read_test_data
 
-from excel_reader import read_test_data, get_browserstack_config
-
+load_dotenv()
 
 class AviasalesFlightBookingTest(unittest.TestCase):
-    """
-    Test class for Aviasales flight booking automation.
-    """
-    
-    # Class variables for configuration
-    USE_BROWSERSTACK = False  # Set to True to use BrowserStack
-    BROWSER = "Chrome"  # Options: "Chrome" or "Firefox"
-    EXCEL_FILE_PATH = "test_data.xlsx"  # Path to Excel file with test data
-    
-    # Configure logger
-    logger = logging.getLogger(__name__)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    USE_BROWSERSTACK = False
+    BROWSER = "Firefox"
+    EXCEL_FILE_PATH = "test_data.xlsx"
     
     def setUp(self):
-        """
-        Setup method - runs before each test.
-        Initializes the WebDriver (local or remote).
-        """
-        self.logger.info("="*60)
-        self.logger.info("SETUP: Initializing WebDriver...")
-        self.logger.info("="*60)
-        
-        # Read test data from Excel
-        self.test_data = self.load_test_data_from_excel()
-        
-        # Initialize driver based on configuration
-        if self.USE_BROWSERSTACK:
-            self.driver = self.setup_browserstack_driver()
-        else:
-            self.driver = self.setup_local_driver()
-        
-        # Maximize browser window
+        self.test_data = read_test_data(self.EXCEL_FILE_PATH)
+        print(f"\n[INFO] Starting browser: {self.BROWSER}")
+        self.driver = self.setup_browserstack_driver() if self.USE_BROWSERSTACK else self.setup_local_driver()
+        print("[INFO] Browser opened successfully")
         self.driver.maximize_window()
-        self.logger.info("✓ WebDriver initialized successfully")
-        self.logger.info(f"✓ Using browser: {self.BROWSER}")
-        self.logger.info(f"✓ Execution mode: {'BrowserStack (Remote)' if self.USE_BROWSERSTACK else 'Local'}")
-    
-    def load_test_data_from_excel(self):
-        """
-        Loads test data from Excel file.
-        
-        Returns:
-            dict: Dictionary with test data
-        """
-        self.logger.info("--- Loading Test Data from Excel ---")
-        
-        # Check if Excel file exists
-        if not os.path.exists(self.EXCEL_FILE_PATH):
-            self.logger.error(f"Excel file not found: {self.EXCEL_FILE_PATH}")
-            self.logger.error("Please create the Excel file using create_excel_file.py")
-            raise FileNotFoundError(f"Excel file not found: {self.EXCEL_FILE_PATH}")
-        
-        # Read test data
-        test_data = read_test_data(self.EXCEL_FILE_PATH)
-        
-        # Validate required fields
-        required_fields = [
-            'url', 'from_city', 'to_city', 'email', 'phone',
-            'name', 'lastname', 'birth_day', 'birth_month', 'birth_year',
-            'passport_number', 'passport_exp_day', 'passport_exp_month',
-            'passport_exp_year', 'nationality'
-        ]
-        
-        missing_fields = [field for field in required_fields if field not in test_data]
-        
-        if missing_fields:
-            self.logger.error(f"Missing required fields in Excel: {missing_fields}")
-            raise ValueError(f"Missing required fields: {missing_fields}")
-        
-        self.logger.info("✓ All required test data loaded successfully")
-        return test_data
     
     def setup_local_driver(self):
-        """
-        Sets up local WebDriver (Chrome or Firefox).
-        
-        Returns:
-            WebDriver: Local WebDriver instance
-        """
-        self.logger.info("--- Setting up Local WebDriver ---")
-        
         if self.BROWSER.lower() == "chrome":
-            options = ChromeOptions()
-            # Add any Chrome options here if needed
-            # options.add_argument('--headless')  # Uncomment for headless mode
-            driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
-                options=options
-            )
+            return webdriver.Chrome(service=Service(ChromeDriverManager().install()))
         elif self.BROWSER.lower() == "firefox":
-            options = FirefoxOptions()
-            # Add any Firefox options here if needed
-            # options.add_argument('--headless')  # Uncomment for headless mode
-            driver = webdriver.Firefox(
-                service=FirefoxService(GeckoDriverManager().install()),
-                options=options
-            )
-        else:
-            raise ValueError(f"Unsupported browser: {self.BROWSER}")
-        
-        return driver
+            return webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
+        raise ValueError(f"Unsupported browser: {self.BROWSER}")
     
     def setup_browserstack_driver(self):
-        """
-        Sets up remote WebDriver for BrowserStack execution.
-        
-        Returns:
-            WebDriver: Remote WebDriver instance connected to BrowserStack
-        """
-        self.logger.info("--- Setting up BrowserStack Remote WebDriver ---")
-        
-        # Get BrowserStack configuration from Excel
-        capabilities, username, access_key = get_browserstack_config(
-            self.EXCEL_FILE_PATH,
-            self.BROWSER
-        )
-        
-        # Validate credentials
+        username = os.getenv('BROWSERSTACK_USERNAME')
+        access_key = os.getenv('BROWSERSTACK_ACCESS_KEY')
         if not username or not access_key:
-            self.logger.error("BrowserStack credentials not found in Excel file")
-            self.logger.error("Please add username and access_key in BrowserStack sheet")
-            raise ValueError("BrowserStack credentials missing")
+            raise ValueError("BrowserStack credentials missing in .env")
         
-        # BrowserStack Hub URL
+        capabilities = {
+            'browserName': self.BROWSER,
+            'browserVersion': 'latest',
+            'os': 'Windows',
+            'osVersion': '11',
+            'projectName': 'Aviasales Automation',
+            'buildName': 'Flight Booking Test',
+            'name': f'Flight Booking - {self.BROWSER}'
+        }
+        
         hub_url = f"https://{username}:{access_key}@hub-cloud.browserstack.com/wd/hub"
-        
-        self.logger.info("✓ Connecting to BrowserStack...")
-        self.logger.info(f"  Browser: {capabilities['browserName']}")
-        self.logger.info(f"  OS: {capabilities['os']} {capabilities['osVersion']}")
-        
-        # Create remote WebDriver
-        driver = webdriver.Remote(
-            command_executor=hub_url,
-            desired_capabilities=capabilities
-        )
-        
-        self.logger.info("✓ Connected to BrowserStack successfully")
-        return driver
+        return webdriver.Remote(command_executor=hub_url, desired_capabilities=capabilities)
     
     def test_flight_booking_process(self):
-        """
-        Main test method - Tests the complete flight booking process.
-        
-        Test Steps:
-        1. Open Aviasales website
-        2. Disable Booking.com checkbox
-        3. Fill search form (from, to, date)
-        4. Search for flights
-        5. Select a flight
-        6. Fill passenger details
-        7. Select flight package
-        """
         driver = self.driver
         wait = WebDriverWait(driver, 20)
         
-        self.logger.info("="*60)
-        self.logger.info("TEST STARTED: Flight Booking Process")
-        self.logger.info("="*60)
-        
-        # STEP 1: Open Aviasales website
-        self.logger.info("[STEP 1] Opening Aviasales website...")
-        website_url = self.test_data['url']
-        driver.get(website_url)
-        self.logger.info(f"✓ Navigated to: {website_url}")
-        time.sleep(2)
-        
-        # STEP 2: Disable Booking.com checkbox
-        self.logger.info("[STEP 2] Handling Booking.com checkbox...")
-        self.handle_booking_checkbox(wait)
-        
-        # STEP 3: Fill search form
-        self.logger.info("[STEP 3] Filling search form...")
-        self.fill_search_form(wait)
-        
-        # STEP 4: Search for flights
-        self.logger.info("[STEP 4] Searching for flights...")
-        self.search_flights(wait)
-        
-        # STEP 5: Select first flight
-        self.logger.info("[STEP 5] Selecting flight...")
-        self.select_flight(wait)
-        
-        # STEP 6: Fill passenger details
-        self.logger.info("[STEP 6] Filling passenger details...")
-        self.fill_passenger_details(wait)
-        
-        # STEP 7: Select comfort package
-        self.logger.info("[STEP 7] Selecting flight package...")
-        self.select_comfort_package(wait)
-        
-        self.logger.info("="*60)
-        self.logger.info("TEST COMPLETED SUCCESSFULLY ✓")
-        self.logger.info("="*60)
+        print(f"[INFO] Opening URL: {self.test_data['url']}")
+        driver.get(self.test_data['url'])
+        print("[INFO] Page loaded. You should see the browser window now!")
         time.sleep(5)
+        
+        self.handle_booking_checkbox(wait)
+        self.fill_search_form(wait)
+        self.search_flights(wait)
+        self.select_flight(wait)
+        self.fill_passenger_details(wait)
+        self.select_comfort_package(wait)
+        time.sleep(3)
     
     def handle_booking_checkbox(self, wait):
-        """
-        Handles the Booking.com checkbox on the homepage.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
         try:
-            booking_label = wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//label[contains(., 'Booking.com')]")
-            ))
-            
-            checkbox_input = booking_label.find_element(By.TAG_NAME, "input")
-            
-            if checkbox_input.is_selected():
-                self.driver.execute_script("arguments[0].click();", booking_label)
-                self.logger.info("✓ Booking.com checkbox was active - disabled it")
-            else:
-                self.driver.execute_script("arguments[0].click();", booking_label)
-                self.logger.info("✓ Clicked on Booking.com checkbox")
-                
-        except Exception as e:
-            self.logger.warning(f"Could not handle Booking checkbox: {e}")
+            booking_label = wait.until(EC.presence_of_element_located((By.XPATH, "//label[contains(., 'Booking.com')]")))
+            self.driver.execute_script("arguments[0].click();", booking_label)
+        except:
+            pass
     
     def fill_search_form(self, wait):
-        """
-        Fills the flight search form with data from Excel.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
-        driver = self.driver
-        
-        # Enter departure city
-        from_city = self.test_data['from_city']
-        from_input = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '//*[@id="avia_form_origin-input"]')
-        ))
+        from_input = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="avia_form_origin-input"]')))
         from_input.clear()
-        from_input.send_keys(from_city)
-        self.logger.info(f"✓ Entered departure city: {from_city}")
+        from_input.send_keys(self.test_data['from_city'])
         
-        # Enter destination city
-        to_city = self.test_data['to_city']
-        to_input = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '//*[@id="avia_form_destination-input"]')
-        ))
+        to_input = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="avia_form_destination-input"]')))
         to_input.clear()
-        to_input.send_keys(to_city)
-        self.logger.info(f"✓ Entered destination city: {to_city}")
+        to_input.send_keys(self.test_data['to_city'])
         
-        # Open calendar
-        date_picker_button = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '/html/body/div[1]/div/div[1]/div[2]/div[2]/div[2]/div/form/div[1]/div[3]/div[1]/div[1]/button[1]')
-        ))
-        date_picker_button.click()
-        self.logger.info("✓ Opened date picker")
+        date_picker = wait.until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[1]/div/div[1]/div[2]/div[2]/div[2]/div/form/div[1]/div[3]/div[1]/div[1]/button[1]')))
+        date_picker.click()
         
-        # Select date (28th of the month)
-        target_date = wait.until(EC.element_to_be_clickable(
-            (By.CSS_SELECTOR, 'div.s__vY0Kp_7_YUAgIkqP:nth-child(3) > table:nth-child(2) > tbody:nth-child(2) > tr:nth-child(5) > td:nth-child(3) > div:nth-child(1) > button:nth-child(1) > div:nth-child(2)')
-        ))
+        target_date = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div.s__vY0Kp_7_YUAgIkqP:nth-child(3) > table:nth-child(2) > tbody:nth-child(2) > tr:nth-child(5) > td:nth-child(3) > div:nth-child(1) > button:nth-child(1) > div:nth-child(2)')))
         target_date.click()
-        self.logger.info("✓ Selected date: 28.02.2025")
-        
-        # Confirm date selection
-        confirm_date_xpath = "//button[contains(., 'Выбрать')] | //button[contains(., 'Готово')] | /html/body/div[1]/div/div[1]/div[2]/div[2]/div[2]/div/form/div[1]/div[3]/div[1]/div[2]/div[1]/div/div/div/div/button"
         
         try:
-            confirm_btn = wait.until(EC.element_to_be_clickable((By.XPATH, confirm_date_xpath)))
+            confirm_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Выбрать')] | //button[contains(., 'Готово')]")))
             confirm_btn.click()
-            self.logger.info("✓ Confirmed date selection")
-        except Exception as e:
-            self.logger.warning("No confirm button needed or found")
+        except:
+            pass
     
     def search_flights(self, wait):
-        """
-        Clicks the search button and waits for results.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
         driver = self.driver
+        initial_url = driver.current_url
         
-        # Click search button
-        search_btn_selector = 'button[data-test-id="form-submit"]'
+        search_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-test-id="form-submit"]')))
+        driver.execute_script("arguments[0].click();", search_button)
         
         try:
-            search_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, search_btn_selector)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
-            time.sleep(1)
-            driver.execute_script("arguments[0].click();", search_button)
-            self.logger.info("✓ Search button clicked")
-            
-        except Exception as e:
-            self.logger.warning("Trying alternative method to submit search...")
-            to_input = driver.find_element(By.XPATH, '//*[@id="avia_form_destination-input"]')
-            to_input.send_keys(Keys.ENTER)
+            WebDriverWait(driver, 20).until(lambda d: "/search" in d.current_url or d.current_url != initial_url)
+        except:
+            driver.find_element(By.XPATH, '//*[@id="avia_form_destination-input"]').send_keys(Keys.ENTER)
         
-        # Wait for search results
-        self.logger.info("⏳ Waiting for search results...")
-        
-        ticket_price_selector = 'div[data-test-id="price"]'
-        ticket_price = WebDriverWait(driver, 45).until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, ticket_price_selector))
-        )
-        
-        self.logger.info("✓ Search results loaded")
+        time.sleep(5)
+        WebDriverWait(driver, 45).until(EC.visibility_of_element_located((By.CSS_SELECTOR, 'div[data-test-id="price"]')))
     
     def select_flight(self, wait):
-        """
-        Selects the first available flight and proceeds to booking.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
         driver = self.driver
         
-        # Click on first ticket price
-        ticket_price_selector = 'div[data-test-id="price"]'
-        ticket_price = wait.until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, ticket_price_selector))
-        )
-        
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", ticket_price)
-        time.sleep(1)
+        ticket_price = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, 'div[data-test-id="price"]')))
         driver.execute_script("arguments[0].click();", ticket_price)
-        self.logger.info("✓ Selected first flight")
         
-        # Click buy button
-        buy_button = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, '/html/body/div[2]/div/div/div/div/div[2]/div/div[2]/div[3]/div[1]/div[1]/div/div[2]/button'))
-        )
-        
+        buy_button = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, '/html/body/div[2]/div/div/div/div/div[2]/div/div[2]/div[3]/div[1]/div[1]/div/div[2]/button')))
         original_window = driver.current_window_handle
         buy_button.click()
-        self.logger.info("✓ Clicked 'Buy' button")
         
-        # Wait for new window and switch to it
         WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))
-        
-        for window_handle in driver.window_handles:
-            if window_handle != original_window:
-                driver.switch_to.window(window_handle)
+        for window in driver.window_handles:
+            if window != original_window:
+                driver.switch_to.window(window)
                 break
-        
-        self.logger.info(f"✓ Switched to booking page: {driver.title}")
         time.sleep(2)
     
     def fill_passenger_details(self, wait):
-        """
-        Fills passenger details form with data from Excel.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
         driver = self.driver
+        d = self.test_data
         
-        # Get passenger data from Excel
-        email = str(self.test_data['email'])
-        phone = str(self.test_data['phone'])
-        name = str(self.test_data['name'])
-        lastname = str(self.test_data['lastname'])
-        birth_day = int(self.test_data['birth_day'])
-        birth_month = int(self.test_data['birth_month'])
-        birth_year = int(self.test_data['birth_year'])
-        passport_number = str(self.test_data['passport_number'])
-        passport_exp_day = int(self.test_data['passport_exp_day'])
-        passport_exp_month = int(self.test_data['passport_exp_month'])
-        passport_exp_year = int(self.test_data['passport_exp_year'])
-        nationality = str(self.test_data['nationality'])
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="contact_email"]'))).send_keys(d['email'])
+        driver.find_element(By.XPATH, '//*[@id="contact_cellphone"]').send_keys(d['phone'])
+        driver.find_element(By.XPATH, '//*[@id="firstName_0"]').send_keys(d['name'])
+        driver.find_element(By.XPATH, '//*[@id="lastName_0"]').send_keys(d['lastname'])
         
-        # Fill email
-        email_input = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="contact_email"]')))
-        email_input.clear()
-        email_input.send_keys(email)
-        self.logger.info(f"✓ Entered email: {email}")
+        try:
+            driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, '//*[@id="gender_F_0"]'))
+        except:
+            pass
         
-        # Fill phone
-        phone_input = driver.find_element(By.XPATH, '//*[@id="contact_cellphone"]')
-        phone_input.clear()
-        phone_input.send_keys(phone)
-        self.logger.info(f"✓ Entered phone: {phone}")
+        Select(driver.find_element(By.XPATH, '//*[@id="birthDateDay_0"]')).select_by_value(f"{int(d['birth_day']):02d}")
+        Select(driver.find_element(By.XPATH, '//*[@id="birthDateMonth_0"]')).select_by_value(f"{int(d['birth_month']):02d}")
+        Select(driver.find_element(By.XPATH, '//*[@id="birthDateYear_0"]')).select_by_value(str(d['birth_year']))
         
-        # Fill name
-        name_input = driver.find_element(By.XPATH, '//*[@id="firstName_0"]')
-        name_input.clear()
-        name_input.send_keys(name)
-        self.logger.info(f"✓ Entered first name: {name}")
+        driver.find_element(By.XPATH, '//*[@id="passportNoAll_0"]').send_keys(d['passport_number'])
         
-        # Fill lastname
-        lastname_input = driver.find_element(By.XPATH, '//*[@id="lastName_0"]')
-        lastname_input.clear()
-        lastname_input.send_keys(lastname)
-        self.logger.info(f"✓ Entered last name: {lastname}")
+        Select(driver.find_element(By.XPATH, '//*[@id="passportDay_0"]')).select_by_value(f"{int(d['passport_exp_day']):02d}")
+        Select(driver.find_element(By.XPATH, '//*[@id="passportMonth_0"]')).select_by_value(f"{int(d['passport_exp_month']):02d}")
+        Select(driver.find_element(By.XPATH, '//*[@id="passportYear_0"]')).select_by_value(str(d['passport_exp_year']))
         
-        # Select gender (female)
-        female_label = driver.find_element(By.XPATH, '//*[@id="gender_F_0"]')
-        if not female_label.is_selected():
-            try:
-                close_overlay = driver.find_elements(By.CSS_SELECTOR, '.membership-container [data-testid="closeIcon"]')
-                if close_overlay:
-                    close_overlay[0].click()
-                    WebDriverWait(driver, 5).until(EC.invisibility_of_element_located((By.ID, 'membershipContainer')))
-                female_label.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", female_label)
-        self.logger.info("✓ Selected gender: Female")
-        
-        # Fill date of birth
-        Select(driver.find_element(By.XPATH, '//*[@id="birthDateDay_0"]')).select_by_value(f"{birth_day:02d}")
-        Select(driver.find_element(By.XPATH, '//*[@id="birthDateMonth_0"]')).select_by_value(f"{birth_month:02d}")
-        Select(driver.find_element(By.XPATH, '//*[@id="birthDateYear_0"]')).select_by_value(str(birth_year))
-        self.logger.info(f"✓ Entered date of birth: {birth_day:02d}/{birth_month:02d}/{birth_year}")
-        
-        # Fill passport number
-        passport_input = driver.find_element(By.XPATH, '//*[@id="passportNoAll_0"]')
-        passport_input.clear()
-        passport_input.send_keys(passport_number)
-        self.logger.info(f"✓ Entered passport number: {passport_number}")
-        
-        # Fill passport expiration
-        Select(driver.find_element(By.XPATH, '//*[@id="passportDay_0"]')).select_by_value(f"{passport_exp_day:02d}")
-        Select(driver.find_element(By.XPATH, '//*[@id="passportMonth_0"]')).select_by_value(f"{passport_exp_month:02d}")
-        Select(driver.find_element(By.XPATH, '//*[@id="passportYear_0"]')).select_by_value(str(passport_exp_year))
-        self.logger.info(f"✓ Entered passport expiration: {passport_exp_day:02d}/{passport_exp_month:02d}/{passport_exp_year}")
-        
-        # Select nationality
-        dropdown = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '.searchable-select__selection')))
-        dropdown.click()
-        
-        search_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '.searchable-select__search')))
-        search_input.clear()
-        search_input.send_keys(nationality)
-        
-        option = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, f"//div[contains(@class, 'searchable-select__option') and text()='{nationality}']")
-        ))
-        option.click()
-        self.logger.info(f"✓ Selected nationality: {nationality}")
-        
-        self.logger.info("✓ All passenger details filled successfully")
+        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '.searchable-select__selection'))).click()
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '.searchable-select__search'))).send_keys(d['nationality'])
+        wait.until(EC.element_to_be_clickable((By.XPATH, f"//div[contains(@class, 'searchable-select__option') and text()='{d['nationality']}']"))).click()
     
     def select_comfort_package(self, wait):
-        """
-        Selects the Comfort flight package.
-        
-        Args:
-            wait: WebDriverWait instance
-        """
-        driver = self.driver
-        
-        comfort_package = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, "//div[contains(@class, 'provider-package__select') and .//p[text()='Comfort']]")
-        ))
-        comfort_package.click()
-        self.logger.info("✓ Selected 'Comfort' flight package")
-        
-        time.sleep(3)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'provider-package__select') and .//p[text()='Comfort']]"))).click()
     
     def tearDown(self):
-        """
-        Cleanup method - runs after each test.
-        Closes the browser and ends the session.
-        """
-        self.logger.info("="*60)
-        self.logger.info("TEARDOWN: Closing browser...")
-        self.logger.info("="*60)
-        
         if self.driver:
             self.driver.quit()
-            self.logger.info("✓ Browser closed successfully")
-
-
-# Test execution configurations
-def run_tests_with_config(use_browserstack=False, browser="Chrome"):
-    """
-    Helper function to run tests with specific configuration.
-    
-    Args:
-        use_browserstack (bool): Whether to use BrowserStack
-        browser (str): Browser to use ("Chrome" or "Firefox")
-    """
-    # Set class variables
-    AviasalesFlightBookingTest.USE_BROWSERSTACK = use_browserstack
-    AviasalesFlightBookingTest.BROWSER = browser
-    
-    # Create test suite
-    suite = unittest.TestLoader().loadTestsFromTestCase(AviasalesFlightBookingTest)
-    
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-    
-    return result
 
 
 if __name__ == "__main__":
-    """
-    Main execution block.
-    Configure your test execution here.
-    """
-    
-    logger = logging.getLogger(__name__)
-    
-    logger.info("="*60)
-    logger.info("AVIASALES FLIGHT BOOKING AUTOMATION TEST")
-    logger.info("="*60)
-    
-    # =====================================================
-    # CONFIGURATION - Modify these settings as needed
-    # =====================================================
-    
-    # Set to True to use BrowserStack, False for local execution
-    USE_REMOTE_EXECUTION = False
-    
-    # Choose browser: "Chrome" or "Firefox"
-    SELECTED_BROWSER = "Chrome"
-    
-    # =====================================================
-    
-    logger.info("Configuration:")
-    logger.info(f"  - Execution Mode: {'BrowserStack (Remote)' if USE_REMOTE_EXECUTION else 'Local'}")
-    logger.info(f"  - Browser: {SELECTED_BROWSER}")
-    logger.info(f"  - Excel File: test_data.xlsx")
-    
-    # Run tests with configuration
-    result = run_tests_with_config(
-        use_browserstack=USE_REMOTE_EXECUTION,
-        browser=SELECTED_BROWSER
-    )
-    
-    # Print summary
-    logger.info("="*60)
-    logger.info("TEST EXECUTION SUMMARY")
-    logger.info("="*60)
-    logger.info(f"Tests run: {result.testsRun}")
-    logger.info(f"Failures: {len(result.failures)}")
-    logger.info(f"Errors: {len(result.errors)}")
-    logger.info(f"Success: {result.wasSuccessful()}")
-    logger.info("="*60)
+    unittest.main()
