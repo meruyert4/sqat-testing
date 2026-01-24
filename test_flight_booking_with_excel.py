@@ -1,12 +1,14 @@
 import unittest
 import time
 import os
+import argparse
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.safari.options import Options as SafariOptions
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 from selenium.webdriver.support.ui import WebDriverWait, Select
@@ -14,13 +16,47 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from excel_reader import read_test_data
+from test_config import validate_browser_os_combination, get_os_config
 
 load_dotenv()
 
+def parse_command_line_args():
+    """Parse command line arguments for test configuration"""
+    parser = argparse.ArgumentParser(description='Run Aviasales flight booking test on BrowserStack')
+    parser.add_argument(
+        '--browser',
+        type=str,
+        default='chrome',
+        choices=['chrome', 'firefox', 'safari'],
+        help='Browser to use (chrome, firefox, safari)'
+    )
+    parser.add_argument(
+        '--os',
+        type=str,
+        default='windows',
+        choices=['windows', 'macos'],
+        help='Operating system (windows or macos). Windows supports: chrome, firefox. macOS supports: chrome, firefox, safari'
+    )
+    parser.add_argument(
+        '--excel',
+        type=str,
+        default='test_data.xlsx',
+        help='Path to Excel file with test data'
+    )
+    parser.add_argument(
+        '--local',
+        action='store_true',
+        default=False,
+        help='Run tests locally instead of BrowserStack (default: False, runs on BrowserStack)'
+    )
+    args, unknown = parser.parse_known_args()
+    return args, unknown
+
 class AviasalesFlightBookingTest(unittest.TestCase):
-    USE_BROWSERSTACK = False
-    BROWSER = "Firefox"
-    EXCEL_FILE_PATH = "test_data.xlsx"
+    USE_BROWSERSTACK = True
+    BROWSER = 'chrome'
+    OS_TYPE = 'windows'
+    EXCEL_FILE_PATH = 'test_data.xlsx'
     
     def setUp(self):
         self.test_data = read_test_data(self.EXCEL_FILE_PATH)
@@ -28,6 +64,7 @@ class AviasalesFlightBookingTest(unittest.TestCase):
         self.driver = self.setup_browserstack_driver() if self.USE_BROWSERSTACK else self.setup_local_driver()
         print("[INFO] Browser opened successfully")
         self.driver.maximize_window()
+        print("[INFO] Window maximized")
     
     def setup_local_driver(self):
         if self.BROWSER.lower() == "chrome":
@@ -42,18 +79,29 @@ class AviasalesFlightBookingTest(unittest.TestCase):
         if not username or not access_key:
             raise ValueError("BrowserStack credentials missing in .env")
         
-        capabilities = {
-            'browserName': self.BROWSER,
-            'browserVersion': 'latest',
-            'os': 'Windows',
-            'osVersion': '11',
+        browser_lower = self.BROWSER.lower()
+        if browser_lower == "chrome":
+            options = ChromeOptions()
+        elif browser_lower == "firefox":
+            options = FirefoxOptions()
+        elif browser_lower == "safari":
+            options = SafariOptions()
+        else:
+            raise ValueError(f"Unsupported browser: {self.BROWSER}")
+        
+        os_config = get_os_config(self.OS_TYPE)
+        
+        options.set_capability('browserVersion', 'latest')
+        options.set_capability('bstack:options', {
+            'os': os_config['os'],
+            'osVersion': os_config['osVersion'],
             'projectName': 'Aviasales Automation',
             'buildName': 'Flight Booking Test',
-            'name': f'Flight Booking - {self.BROWSER}'
-        }
+            'sessionName': f'{self.OS_TYPE.upper()} - {self.BROWSER.upper()}'
+        })
         
         hub_url = f"https://{username}:{access_key}@hub-cloud.browserstack.com/wd/hub"
-        return webdriver.Remote(command_executor=hub_url, desired_capabilities=capabilities)
+        return webdriver.Remote(command_executor=hub_url, options=options)
     
     def test_flight_booking_process(self):
         driver = self.driver
@@ -61,7 +109,6 @@ class AviasalesFlightBookingTest(unittest.TestCase):
         
         print(f"[INFO] Opening URL: {self.test_data['url']}")
         driver.get(self.test_data['url'])
-        print("[INFO] Page loaded. You should see the browser window now!")
         time.sleep(5)
         
         self.handle_booking_checkbox(wait)
@@ -169,4 +216,21 @@ class AviasalesFlightBookingTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import sys
+    
+    args, unknown = parse_command_line_args()
+    
+    AviasalesFlightBookingTest.USE_BROWSERSTACK = not args.local
+    AviasalesFlightBookingTest.BROWSER = args.browser
+    AviasalesFlightBookingTest.OS_TYPE = args.os
+    AviasalesFlightBookingTest.EXCEL_FILE_PATH = args.excel
+    
+    validate_browser_os_combination(args.browser, args.os)
+    
+    print(f"\n[CONFIG] BrowserStack: {AviasalesFlightBookingTest.USE_BROWSERSTACK}")
+    print(f"[CONFIG] Browser: {args.browser.upper()}")
+    print(f"[CONFIG] OS: {args.os.upper()}")
+    print(f"[CONFIG] Excel: {args.excel}\n")
+    
+    sys.argv = [sys.argv[0]] + unknown
     unittest.main()
