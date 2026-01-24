@@ -298,33 +298,35 @@ class AviasalesFlightBookingTest(unittest.TestCase):
             # Wait longer for modal/popup to appear
             time.sleep(3)
             
-            # Try multiple selectors for buy button with longer wait
+            # Check if Wingie proposal exists
+            logging.info("Looking for Wingie proposal")
+            wingie_elements = driver.find_elements(By.XPATH, "//div[contains(text(), 'Wingie')]")
+            
+            if not wingie_elements:
+                logging.warning("Wingie proposal not found - skipping test")
+                self.skipTest("Wingie proposal not available in search results")
+            
+            logging.info("Wingie proposal found, clicking buy button")
+            
+            # Find the Buy button associated with Wingie
             buy_button = None
-            selectors = [
-                (By.XPATH, '/html/body/div[2]/div/div/div/div/div[2]/div/div[2]/div[3]/div[1]/div[1]/div/div[2]/button'),
-                (By.CSS_SELECTOR, 'button[data-test-id="flight-buy-button"]'),
-                (By.XPATH, "//button[contains(text(), 'Купить') or contains(text(), 'Buy')]"),
-                (By.CSS_SELECTOR, 'div[class*="buy"] button'),
-                (By.XPATH, "//div[contains(@class, 'Button')]//button")
-            ]
-            
-            for selector_type, selector in selectors:
-                try:
-                    buy_button = WebDriverWait(driver, 30).until(
-                        EC.element_to_be_clickable((selector_type, selector))
-                    )
-                    logging.info(f"Buy button found with selector: {selector}")
-                    break
-                except Exception as e:
-                    logging.warning(f"Selector failed: {selector}")
-                    continue
-            
-            if not buy_button:
-                raise Exception("Could not find buy button with any selector")
+            try:
+                buy_button = WebDriverWait(driver, 30).until(
+                    EC.element_to_be_clickable((By.XPATH, 
+                        "//div[@data-test-id='text' and contains(text(), 'Wingie')]/ancestor::div[@data-test-id='proposal-0' or contains(@class, 'proposal')]//button"))
+                )
+                logging.info("Buy button found for Wingie proposal")
+            except Exception as e:
+                logging.error(f"Failed to find Wingie buy button: {str(e)}")
+                raise Exception("Could not find buy button for Wingie proposal")
             
             original_window = driver.current_window_handle
-            buy_button.click()
-            logging.info("Buy button clicked")
+            
+            # Scroll to buy button and click
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", buy_button)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", buy_button)
+            logging.info("Clicked Buy button for Wingie proposal")
             
             # Safari needs more time for window to open
             time.sleep(3)
